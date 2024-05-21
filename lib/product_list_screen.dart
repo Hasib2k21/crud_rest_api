@@ -1,18 +1,15 @@
 import 'dart:convert';
-
-import 'package:crud_rest_api/product.dart';
-import 'package:crud_rest_api/update_product_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart';
-
-
+import 'package:http/http.dart' as http;
+import 'package:crud_rest_api/product.dart';
 import 'add_product_screen.dart';
+import 'update_product_screen.dart';
 
 class ProductListScreen extends StatefulWidget {
-  const ProductListScreen({super.key});
+  const ProductListScreen({Key? key}) : super(key: key);
 
   @override
-  State<ProductListScreen> createState() => _ProductListScreenState();
+  _ProductListScreenState createState() => _ProductListScreenState();
 }
 
 class _ProductListScreenState extends State<ProductListScreen> {
@@ -29,25 +26,26 @@ class _ProductListScreenState extends State<ProductListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Product list'),
+        title: const Text('Product List'),
       ),
       body: RefreshIndicator(
-        // onRefresh: () async {
-        //   _getProductList();
-        // },
         onRefresh: _getProductList,
-        child: Visibility(
-          visible: _getProductListInProgress == false,
-          replacement: const Center(
-            child: CircularProgressIndicator(),
+        child: _getProductListInProgress
+            ? const Center(
+          child: CircularProgressIndicator(),
+        )
+            : GridView.builder(
+          padding: const EdgeInsets.all(10),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 1, // Adjust according to your needs
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 4 / 4, // Increase card size
           ),
-          child: ListView.separated(
-            itemCount: productList.length,
-            itemBuilder: (context, index) {
-              return _buildProductItem(productList[index]); // n(1)
-            },
-            separatorBuilder: (_, __) => const Divider(),
-          ),
+          itemCount: productList.length,
+          itemBuilder: (context, index) {
+            return _buildProductItem(productList[index]);
+          },
         ),
       ),
       floatingActionButton: FloatingActionButton(
@@ -55,7 +53,9 @@ class _ProductListScreenState extends State<ProductListScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const AddProductScreen()),
-          );
+          ).then((_) {
+            _getProductList();
+          });
         },
         child: const Icon(Icons.add),
       ),
@@ -63,21 +63,20 @@ class _ProductListScreenState extends State<ProductListScreen> {
   }
 
   Future<void> _getProductList() async {
-    _getProductListInProgress = true;
-    setState(() {});
+    setState(() {
+      _getProductListInProgress = true;
+    });
+
     productList.clear();
     const String productListUrl = 'https://crud.teamrabbil.com/api/v1/ReadProduct';
     Uri uri = Uri.parse(productListUrl);
-    Response response = await get(uri);
+    http.Response response = await http.get(uri);
     print(response.statusCode);
     print(response.body);
 
     if (response.statusCode == 200) {
-      // data decode
       final decodedData = jsonDecode(response.body);
-      // get the list
       final jsonProductList = decodedData['data'];
-      // loop over the list
       for (Map<String, dynamic> json in jsonProductList) {
         ProductModel productModel = ProductModel.fromJson(json);
         productList.add(productModel);
@@ -88,51 +87,73 @@ class _ProductListScreenState extends State<ProductListScreen> {
       );
     }
 
-    _getProductListInProgress = false;
-    setState(() {});
+    setState(() {
+      _getProductListInProgress = false;
+    });
   }
 
   Widget _buildProductItem(ProductModel product) {
-    return ListTile(
-      // leading: Image.network(
-      //   product.image,
-      //   height: 60,
-      //   width: 60,
-      // ),
-      title: Text(product.productName ?? 'Unknown'),
-      subtitle: Wrap(
-        spacing: 16,
-        children: [
-          Text('Unit Price: ${product.unitPrice}'),
-          Text('Quantity : ${product.quantity}'),
-          Text('Total Price: ${product.totalPrice}'),
-        ],
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
       ),
-      trailing: Wrap(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => UpdateProductScreen(
-                    product: product,
-                  ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+
+            Expanded(
+              child: product.image != null
+                  ? Image.network(
+                product.image!,
+                height: 150,
+                width: double.infinity,
+                fit: BoxFit.fill, // Center the image
+                errorBuilder: (context, error, stackTrace) =>
+                const Icon(Icons.broken_image),
+              )
+                  : const Icon(Icons.broken_image),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              product.productName ?? 'Unknown',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text('Unit Price: BDT ${product.unitPrice}'),
+            Text('QTY: ${product.quantity}'),
+            Row(
+              children: [
+                Text('BDT ${product.totalPrice}'),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.edit),
+                  onPressed: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => UpdateProductScreen(
+                          product: product,
+                        ),
+                      ),
+                    );
+                    if (result == true) {
+                      _getProductList();
+                    }
+                  },
                 ),
-              );
-              if (result == true) {
-                _getProductList();
-              }
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline_sharp),
-            onPressed: () {
-              _showDeleteConfirmationDialog(product.id!);
-            },
-          ),
-        ],
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_sharp),
+                  onPressed: () {
+                    _showDeleteConfirmationDialog(product.id!);
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -165,20 +186,22 @@ class _ProductListScreenState extends State<ProductListScreen> {
   }
 
   Future<void> _deleteProduct(String productId) async {
-    _getProductListInProgress = true;
-    setState(() {});
-    String deleteProductUrl =
-        'https://crud.teamrabbil.com/api/v1/DeleteProduct/$productId';
+    setState(() {
+      _getProductListInProgress = true;
+    });
+
+    String deleteProductUrl = 'https://crud.teamrabbil.com/api/v1/DeleteProduct/$productId';
     Uri uri = Uri.parse(deleteProductUrl);
-    Response response = await get(uri);
+    http.Response response = await http.delete(uri);
     print(response.statusCode);
     print(response.body);
 
     if (response.statusCode == 200) {
       _getProductList();
     } else {
-      _getProductListInProgress = false;
-      setState(() {});
+      setState(() {
+        _getProductListInProgress = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Delete product failed! Try again.')),
       );
